@@ -5,7 +5,7 @@ print('Hiding cuda devices')
 
 from styx_msgs.msg import TrafficLight
 import scipy
-from .models import get_detector_model, get_classification_model
+from .models import get_slow_detector_model as get_detector_model, get_classification_model
 from collections import Counter
 import numpy as np
 from scipy.ndimage.measurements import label
@@ -39,7 +39,8 @@ detector_image_size = (640, 480)
 class TLClassifier(object):
     def __init__(self):
         directory = os.path.dirname(__file__) + "/models"
-        detector_model_location = directory + "/fast_traffic_detection_model_v2.hdf5"
+        #detector_model_location = directory + "/fast_traffic_detection_model_v4.hdf5"
+        detector_model_location = directory + "/traffic_light_detector_v1.hdf5"
         classification_model_location = directory + "/traffic_light_classification_v1.hdf5"
         self.blackbox = Blackbox(feeds=['raw', 'traffic_light_detection', 'traffic_light_classification'])
 
@@ -130,6 +131,12 @@ class TLClassifier(object):
         found_traffic_lights = []
         
         prediction = prediction * 255
+        rospy.logerr('Sections before merge'.format(len(sections)))
+
+        #sections = merge_vertically_sharing_bboxes(sections)
+        rospy.logerr('Sections after merge'.format(len(sections)))
+
+        sections = [bbox for bbox in sections if (bbox.width / bbox.height) < 1]
 
         for bounding_box in sections:
             sub_image = image_bounding_box_manager.get_image_in_bounding_box(image, bounding_box)
@@ -155,3 +162,34 @@ class TLClassifier(object):
 
 def resize_for_detection_model(image):
     return scipy.misc.imresize(image, detector_image_size)
+
+def merge_vertically_sharing_bboxes(bboxs):
+    finished = False
+    all_bboxs = bboxs
+    while finished is False:
+        print('Current count:{0}'.format(len(all_bboxs)))
+        combined_rectangles = set()
+        new_rectangles = set()
+
+        for i, bbox in enumerate(all_bboxs):
+            for bbox2 in all_bboxs[i:]:
+                if bboxes_intersect_vertically(bbox, bbox2):
+                    new_rectangles.add(bbox.merge(bbox2))
+                    combined_rectangles.add(bbox)
+                    combined_rectangles.add(bbox2)
+        if len(combined_rectangles) == 0 and len(new_rectangles) == 0:
+            finished = True
+        else:
+            all_bboxs = list(new_rectangles) + [x for x in all_bboxs if x not in combined_rectangles]
+    return all_bboxs
+
+def bboxes_intersect_vertically(bbox1, bbox2):
+    if bbox2.min_x <= bbox1.min_x and bbox1.min_x <= bbox2.max_x:
+        return True 
+    if bbox2.min_x <= bbox1.max_x and bbox1.max_x <= bbox2.max_x:
+        return True 
+    if bbox1.min_x <= bbox2.min_x and bbox2.min_x <= bbox1.max_x:
+        return True 
+    if bbox1.min_x <= bbox2.max_x and bbox2.max_x <= bbox1.max_x:
+        return True 
+    return False

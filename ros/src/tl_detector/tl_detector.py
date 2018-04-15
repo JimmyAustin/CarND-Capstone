@@ -190,8 +190,8 @@ class TLDetector(object):
         distance_to_next_waypoint = distance_between_poses(self.pose, waypoint.pose.pose)
         rospy.logerr('Distance to next traffic light: ' + str(distance_to_next_waypoint))
 
-        if distance_to_next_waypoint > 200:
-            return waypoint_id, TrafficLight.UNKNOWN
+        #if distance_to_next_waypoint > 200:
+        #    return waypoint_id, TrafficLight.UNKNOWN
         state = self.get_light_state(closest_traffic_light)
         rospy.logerr('State: ' + str(state))
 
